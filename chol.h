@@ -21,5 +21,8 @@ typedef struct {
 } Matrix;
 
 
+
+//unsigned compareArrays(float * reference.elements, float * U_on_device.elements, int size, float epsilon);
+
 #endif // _MATRIX_H_
 
