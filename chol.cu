@@ -358,18 +358,10 @@ void chol_on_device_cudaUFMG(const Matrix A, Matrix U) {
      * Max elements for thread = 12k elements
      *      
      */
-    const int threads_per_block = 512;    
-    int blocks = MATRIX_SIZE / threads_per_block;
     
-    //Set up the execution grid on the GPU
-    printf("Threads per block: %d\n", threads_per_block);
-    printf("Number of blocks: %d\n", blocks);
-
 
     
     
-    //Start timer BEFORE copy
-    cudaEventRecord(start, 0);    
     
     //Allocate space on gpu for U
     Matrix gpu_u = allocate_matrix_on_gpu(U);
@@ -377,14 +369,34 @@ void chol_on_device_cudaUFMG(const Matrix A, Matrix U) {
     //Copy matrices to gpu, copy A right into U
     copy_matrix_to_device(gpu_u, A);
 
-    dim3 thread_block(threads_per_block, 1, 1);
-    dim3 grid(blocks, 1);
 
-    //Call the div kernel for this k iteration
+    int threads_per_block_sqrt = 512;    
+    int blocks_sqrt = MATRIX_SIZE / threads_per_block_sqrt;    
+    dim3 thread_block(threads_per_block_sqrt, 1, 1);
+    dim3 grid(blocks_sqrt, 1);    
     chol_kernel_cudaUFMG_sqrt << <grid, thread_block>>>(gpu_u.elements);
     
     
     
+    int block_x_div = 16;    
+    int block_y_div = 16;        
+    int threads_per_block_div = 512;
+    
+    int elements_per_thread_div = ((MATRIX_SIZE * MATRIX_SIZE) / 2) / (threads_per_block_div * block_x_div * block_y_div);
+    
+    //Set up the execution grid on the GPU
+    printf("Elements_per_thread: %d\n", elements_per_thread_div);
+
+    return;
+    
+    dim3 grid_div(block_x_div, block_y_div, 1);    
+    dim3 thread_block_div(512, 1, 1);
+    
+    //Start timer BEFORE copy
+    cudaEventRecord(start, 0);    
+    
+    
+    chol_kernel_cudaUFMG_division << <grid_div, thread_block_div >>>(gpu_u.elements);
     
     
     //Stop timer after copy back					 
@@ -397,6 +409,13 @@ void chol_on_device_cudaUFMG(const Matrix A, Matrix U) {
     //Free memory on device
     cudaFree(gpu_u.elements);
 
+    
+    //Set up the execution grid on the GPU
+    printf("Threads per block sqrt: %d\n", threads_per_block_sqrt);
+    printf("Number of blocks sqrt: %d\n", blocks_sqrt);
+
+    
+    
     printf("	Run time:    %0.10f s. \n", time_gpu_fast / 1000);
             
     printf("	Speedup: %0.10f\n", time_cpu / (time_gpu_fast / 1000) ) ;

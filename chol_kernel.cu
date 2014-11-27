@@ -32,21 +32,10 @@ __global__ void chol_kernel_cudaUFMG_sqrt(float * U) {
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+__global__ void chol_kernel_cudaUFMG_division(float * U) {
+    // Get a thread identifier 
+    //int tx = blockIdx.x * blockDim.x + threadIdx.x;
+}
 
 
 

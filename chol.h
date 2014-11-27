@@ -2,7 +2,7 @@
 #define _MATRIX_H_
 
 // Thread block size
-#define MATRIX_SIZE 512
+#define MATRIX_SIZE 2048
 // Matrix dimensions
 #define NUM_COLUMNS MATRIX_SIZE // Number of columns in Matrix A
 #define NUM_ROWS MATRIX_SIZE // Number of rows in Matrix A
