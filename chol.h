@@ -2,7 +2,7 @@
 #define _MATRIX_H_
 
 // Thread block size
-#define MATRIX_SIZE 2048
+#define MATRIX_SIZE 512
 // Matrix dimensions
 #define NUM_COLUMNS MATRIX_SIZE // Number of columns in Matrix A
 #define NUM_ROWS MATRIX_SIZE // Number of rows in Matrix A
@@ -20,6 +20,9 @@ typedef struct {
     float* elements;
 } Matrix;
 
+
+
+//unsigned compareArrays(float * reference.elements, float * U_on_device.elements, int size, float epsilon);
 
 #endif // _MATRIX_H_
 
