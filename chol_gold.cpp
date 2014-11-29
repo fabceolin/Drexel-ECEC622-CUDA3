@@ -142,14 +142,18 @@ int chol_gold(const Matrix A, Matrix U) {
         for (j = (k + 1); j < U.num_rows; j++)
             U.elements[k * U.num_rows + j] /= U.elements[k * U.num_rows + k]; // Division step
 
-
+        continue;
+        
+        
         // Elimination step
         for (i = (k + 1); i < U.num_rows; i++)
             for (j = i; j < U.num_rows; j++)
                 U.elements[i * U.num_rows + j] -= U.elements[k * U.num_rows + i] * U.elements[k * U.num_rows + j];
-
+    
     }
 
+    return 1;
+    
     // As the final step, zero out the lower triangular portion of U
     for (i = 0; i < U.num_rows; i++)
         for (j = 0; j < i; j++)

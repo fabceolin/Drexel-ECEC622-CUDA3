@@ -356,48 +356,49 @@ void chol_on_device_cudaUFMG(const Matrix A, Matrix U) {
      * 1 element = 1 scalar of a matrix
      * Limited by shared memory, a maximum of   49152 / size_of(float)  elements can be copied to shared memory on each interation.
      * Max elements for thread = 12k elements
-     *      
      */
-    
-
-    
     
     
     //Allocate space on gpu for U
     Matrix gpu_u = allocate_matrix_on_gpu(U);
+
+
+    //Start timer BEFORE copy
+    cudaEventRecord(start, 0);    
     
     //Copy matrices to gpu, copy A right into U
     copy_matrix_to_device(gpu_u, A);
 
 
+    
+    
     int threads_per_block_sqrt = 512;    
     int blocks_sqrt = MATRIX_SIZE / threads_per_block_sqrt;    
     dim3 thread_block(threads_per_block_sqrt, 1, 1);
     dim3 grid(blocks_sqrt, 1);    
-    chol_kernel_cudaUFMG_sqrt << <grid, thread_block>>>(gpu_u.elements);
+    chol_kernel_cudaUFMG_sqrt <<<grid, thread_block>>>(gpu_u.elements);
+    
+
+    
     
     
     
     int block_x_div = 16;    
     int block_y_div = 16;        
-    int threads_per_block_div = 512;
-    
-    int elements_per_thread_div = ((MATRIX_SIZE * MATRIX_SIZE) / 2) / (threads_per_block_div * block_x_div * block_y_div);
-    
-    //Set up the execution grid on the GPU
-    printf("Elements_per_thread: %d\n", elements_per_thread_div);
-
-    return;
-    
+    int thread_x_div = 4;    
+    int thread_y_div = 4;        
     dim3 grid_div(block_x_div, block_y_div, 1);    
-    dim3 thread_block_div(512, 1, 1);
+    dim3 thread_block_div(thread_x_div, thread_y_div, 1);
+    int elements_per_thread_div = ((MATRIX_SIZE * MATRIX_SIZE) / 2) /  (thread_x_div * thread_y_div * block_x_div * block_y_div);        
+    chol_kernel_cudaUFMG_division << <grid_div, thread_block_div >>>(gpu_u.elements, elements_per_thread_div);
+
     
-    //Start timer BEFORE copy
-    cudaEventRecord(start, 0);    
     
     
-    chol_kernel_cudaUFMG_division << <grid_div, thread_block_div >>>(gpu_u.elements);
+    /*---------------------------------------------*/
     
+    //Copy data back
+    copy_matrix_from_device(U, gpu_u);
     
     //Stop timer after copy back					 
     cudaEventRecord(stop, 0);
@@ -408,13 +409,12 @@ void chol_on_device_cudaUFMG(const Matrix A, Matrix U) {
     
     //Free memory on device
     cudaFree(gpu_u.elements);
-
     
     //Set up the execution grid on the GPU
     printf("Threads per block sqrt: %d\n", threads_per_block_sqrt);
     printf("Number of blocks sqrt: %d\n", blocks_sqrt);
 
-    
+    printf("Elements_per_thread div: %d\n", elements_per_thread_div);
     
     printf("	Run time:    %0.10f s. \n", time_gpu_fast / 1000);
             
