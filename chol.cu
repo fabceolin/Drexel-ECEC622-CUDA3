@@ -408,29 +408,24 @@ void chol_on_device_cudaUFMG(const Matrix A, Matrix U) {
 
 
     
-#if 1
+
 
     int block_x_eli = 256;    
     int block_y_eli = 1;        
     int thread_x_eli = 16;    
     int thread_y_eli = 1;        
-    
-    
     dim3 grid_eli(block_x_eli, block_y_eli, 1);    
-    dim3 thread_block_eli(thread_x_eli, thread_y_eli, 1);    
-    
-    //int elements_per_thread_eli = ((MATRIX_SIZE * MATRIX_SIZE) / 2) /  (thread_x_eli * thread_y_eli * block_x_eli * block_y_eli);
-    
-    //cudaStream_t stream1;
-    //cudaStreamCreate ( &stream1) ;
-    
+    dim3 thread_block_eli(thread_x_eli, thread_y_eli, 1);        
     chol_kernel_cudaUFMG_elimination <<<grid_eli, thread_block_eli>>>(gpu_u.elements);        
     
-    //cudaStreamSynchronize (stream1);
-    //cudaDeviceSynchronize();
-    
-#endif
 
+
+    
+
+    chol_kernel_cudaUFMG_zero <<<grid_div, thread_block_div >>>(gpu_u.elements, elements_per_thread_div);
+    
+    
+    
     
     /*---------------------------------------------*/
     
@@ -459,8 +454,8 @@ void chol_on_device_cudaUFMG(const Matrix A, Matrix U) {
     //Check if the device result is equivalent to the expected solution. If you can't meet the desired tolerance, try using double precision support.
     unsigned int size_fast = reference.num_rows * reference.num_columns;
     
-    print_matrix_to_file(U,"matrix-CUDA.txt");
-    print_matrix_to_file(reference,"matrix-CPU.txt");
+    //print_matrix_to_file(U,"matrix-CUDA.txt");
+    //print_matrix_to_file(reference,"matrix-CPU.txt");
     
     unsigned res = compareArrays(reference.elements, U.elements, size_fast);
     if(res==1){

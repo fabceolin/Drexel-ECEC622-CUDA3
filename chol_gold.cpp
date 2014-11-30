@@ -171,7 +171,7 @@ int chol_gold(const Matrix A, Matrix U) {
     
     }
 
-    return 1;
+    //return 1;
     
     // As the final step, zero out the lower triangular portion of U
     for (i = 0; i < U.num_rows; i++)

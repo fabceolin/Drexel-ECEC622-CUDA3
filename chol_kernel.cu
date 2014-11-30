@@ -127,11 +127,11 @@ __global__ void chol_kernel_cudaUFMG_elimination(float * U) {
     
     for(int k=offset_k; k<end_k; k++){
         for(int i=offset_i; i<end_i; i++){
-            //printf("\n%d",i);
-            //printf("\n%d %d %d", ij, ki, kj);
+            
+            int ki = k*MATRIX_SIZE + i;
+            
             for(int j=i; j<MATRIX_SIZE; j++){                
-                int ij = i*MATRIX_SIZE + j;
-                int ki = k*MATRIX_SIZE + i;
+                int ij = i*MATRIX_SIZE + j;                
                 int kj = k*MATRIX_SIZE + j;
 
                 U[ij] = U[ij] - U[ki] * U[kj];
@@ -140,6 +140,60 @@ __global__ void chol_kernel_cudaUFMG_elimination(float * U) {
     }
     
 }
+
+
+
+
+
+
+
+
+
+__global__ void chol_kernel_cudaUFMG_zero(float * U, int elem_per_thr) {
+    // Get a thread identifier 
+    int tx = blockIdx.x * blockDim.x + threadIdx.x;
+    int ty = blockIdx.y * blockDim.y + threadIdx.y;
+    
+    int tn = ty * blockDim.x * gridDim.x + tx;    
+    
+    for(unsigned i=0;i<elem_per_thr;i++){
+        int iel = tn * elem_per_thr + i;
+        int xval = iel % MATRIX_SIZE;
+        int yval = iel / MATRIX_SIZE;
+
+        if(xval == yval){        
+            continue;
+        }        
+        
+        // if on the upper diagonal...
+        if(yval < xval){
+            xval = MATRIX_SIZE - xval - 1;
+            yval = MATRIX_SIZE - yval - 1;
+        }
+        int iU = xval + yval * MATRIX_SIZE;
+        U[iU] = 0;                            
+    }
+    
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
