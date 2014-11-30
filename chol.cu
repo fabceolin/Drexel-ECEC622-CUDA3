@@ -17,6 +17,7 @@
 
 // includes, kernels
 #include "chol_kernel.cu"
+#include "utils.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -34,6 +35,8 @@ extern "C" int check_chol(const Matrix, const Matrix);
 void chol_on_device(const Matrix, Matrix);
 void chol_on_device_optimized(const Matrix, Matrix);
 void chol_on_device_cudaUFMG(const Matrix, Matrix);
+
+extern void print_matrix_to_file(const Matrix M, char *filename);
 
 //Globals
 double time_cpu;
@@ -87,13 +90,13 @@ int main(int argc, char** argv) {
         printf("Cholesky decomposition failed. The input matrix is not positive definite. \n");
         exit(0);
     }
-    /*
+#if 0
     printf("Double checking for correctness by recovering the original matrix. \n");
     if(check_chol(A, reference) == 0){
             printf("CPU: FAILED\n");
             exit(0);
     }
-     */
+#endif    
     printf("	PASSED\n"); //IT IS SO PERFECT WE DON'T EVEN CHECK.
 
 
@@ -135,9 +138,20 @@ void check_for_error(char *msg) {
 
 
 
-unsigned compareArrays(float *reference, float * device, int size, float epsilon){
-    for(int i=0; i<size; size++) {
-        if (reference[i] - device[i] > epsilon) {
+unsigned compareArrays(float *reference, float * device, int size){
+    
+    
+    float epsilon = 0.02;
+    
+    //printf("\nSize= %d", size);
+    
+    for(int i=0; i<size; i++) {
+        
+        if(i<100){
+            //printf("\nreference=%f   \ndevice=%f \nepsilon=%f" , reference[i], device[i], epsilon);
+        }
+        
+        if (fabs(reference[i] - device[i]) > epsilon) {
             return 0;
         }
     }
@@ -219,7 +233,7 @@ void chol_on_device(const Matrix A, Matrix U) {
     printf("	Speedup: %0.10f\n", time_cpu / time_gpu);
     //Check if the device result is equivalent to the expected solution. If you can't meet the desired tolerance, try using double precision support.
     unsigned int size = reference.num_rows * reference.num_columns;
-    unsigned res = compareArrays(reference.elements, U.elements, size, 0.1f);
+    unsigned res = compareArrays(reference.elements, U.elements, size);
     printf("	%s\n", (1 == res) ? "PASSED" : "FAILED");
 }
 
@@ -326,7 +340,7 @@ void chol_on_device_optimized(const Matrix A, Matrix U) {
     printf("	Speedup: %0.10f\n", time_cpu / time_gpu_fast);
     //Check if the device result is equivalent to the expected solution. If you can't meet the desired tolerance, try using double precision support.
     unsigned int size_fast = reference.num_rows * reference.num_columns;
-    unsigned res = compareArrays(reference.elements, U.elements, size_fast, 0.1f);
+    unsigned res = compareArrays(reference.elements, U.elements, size_fast);
     printf("	%s\n", (1 == res) ? "PASSED" : "FAILED");
     
     //	CUTBoolean res_fast = cutComparefe(reference.elements, U_on_device_fast.elements, size_fast, 0.1f);
@@ -356,73 +370,129 @@ void chol_on_device_cudaUFMG(const Matrix A, Matrix U) {
      * 1 element = 1 scalar of a matrix
      * Limited by shared memory, a maximum of   49152 / size_of(float)  elements can be copied to shared memory on each interation.
      * Max elements for thread = 12k elements
-     *      
      */
-    
-
-    
     
     
     //Allocate space on gpu for U
     Matrix gpu_u = allocate_matrix_on_gpu(U);
+
+
+    //Start timer BEFORE copy
+    cudaEventRecord(start, 0);    
     
     //Copy matrices to gpu, copy A right into U
     copy_matrix_to_device(gpu_u, A);
 
 
+    
+    
     int threads_per_block_sqrt = 512;    
     int blocks_sqrt = MATRIX_SIZE / threads_per_block_sqrt;    
     dim3 thread_block(threads_per_block_sqrt, 1, 1);
     dim3 grid(blocks_sqrt, 1);    
-    chol_kernel_cudaUFMG_sqrt << <grid, thread_block>>>(gpu_u.elements);
+    chol_kernel_cudaUFMG_sqrt <<<grid, thread_block>>>(gpu_u.elements);
+    
+
+    
     
     
     
     int block_x_div = 16;    
     int block_y_div = 16;        
-    int threads_per_block_div = 512;
-    
-    int elements_per_thread_div = ((MATRIX_SIZE * MATRIX_SIZE) / 2) / (threads_per_block_div * block_x_div * block_y_div);
-    
-    //Set up the execution grid on the GPU
-    printf("Elements_per_thread: %d\n", elements_per_thread_div);
-
-    return;
-    
+    int thread_x_div = 4;    
+    int thread_y_div = 4;        
     dim3 grid_div(block_x_div, block_y_div, 1);    
-    dim3 thread_block_div(512, 1, 1);
+    dim3 thread_block_div(thread_x_div, thread_y_div, 1);
+    int elements_per_thread_div = ((MATRIX_SIZE * MATRIX_SIZE) / 2) /  (thread_x_div * thread_y_div * block_x_div * block_y_div);        
+    chol_kernel_cudaUFMG_division <<<grid_div, thread_block_div >>>(gpu_u.elements, elements_per_thread_div);
+
+
+
     
-    //Start timer BEFORE copy
-    cudaEventRecord(start, 0);    
+
+#if 1
+    
+    int block_x_eli = 128;    
+    int block_y_eli = 1;        
+    int thread_x_eli = 32;    
+    int thread_y_eli = 1;        
+    dim3 grid_eli(block_x_eli, block_y_eli, 1);    
+    dim3 thread_block_eli(thread_x_eli, thread_y_eli, 1);            
+    
+    int divider = 1;
+    for(int ik=0; ik<divider; ik++){
+        chol_kernel_cudaUFMG_elimination <<<grid_eli, thread_block_eli>>>(gpu_u.elements, ik, divider);        
+    }
     
     
-    chol_kernel_cudaUFMG_division << <grid_div, thread_block_div >>>(gpu_u.elements);
     
+    
+#else
+    
+    int block_x_eli = 1024;    
+    int block_y_eli = 1;        
+    int thread_x_eli = 4;    
+    int thread_y_eli = 1;        
+    dim3 grid_eli(block_x_eli, block_y_eli, 1);    
+    dim3 thread_block_eli(thread_x_eli, thread_y_eli, 1);        
+    
+    int shared_mem_size = 4 * MATRIX_SIZE * sizeof(float);    
+    chol_kernel_cudaUFMG_elimination_shared <<<grid_eli, thread_block_eli, shared_mem_size>>>(gpu_u.elements);        
+
+#endif    
+
+    
+    
+
+    
+    
+    chol_kernel_cudaUFMG_zero <<<grid_div, thread_block_div>>>(gpu_u.elements, elements_per_thread_div);
+    
+    
+    
+    
+    
+    /*---------------------------------------------*/
+    
+    //Copy data back
+    copy_matrix_from_device(U, gpu_u);
+
+    //CUDA_SAFE_CALL(cudaPeekAtLastError());    
+    //return;
+
     
     //Stop timer after copy back					 
-    cudaEventRecord(stop, 0);
-    cudaEventSynchronize(stop);
+    CUDA_SAFE_CALL(cudaEventRecord(stop, 0));
+    CUDA_SAFE_CALL(cudaEventSynchronize(stop));
 
     float time_gpu_fast;
-    cudaEventElapsedTime(&time_gpu_fast, start, stop);
+    CUDA_SAFE_CALL(cudaEventElapsedTime(&time_gpu_fast, start, stop));
     
     //Free memory on device
     cudaFree(gpu_u.elements);
-
     
     //Set up the execution grid on the GPU
     printf("Threads per block sqrt: %d\n", threads_per_block_sqrt);
     printf("Number of blocks sqrt: %d\n", blocks_sqrt);
 
-    
+    printf("Elements_per_thread div: %d\n", elements_per_thread_div);
     
     printf("	Run time:    %0.10f s. \n", time_gpu_fast / 1000);
             
     printf("	Speedup: %0.10f\n", time_cpu / (time_gpu_fast / 1000) ) ;
     //Check if the device result is equivalent to the expected solution. If you can't meet the desired tolerance, try using double precision support.
     unsigned int size_fast = reference.num_rows * reference.num_columns;
-    unsigned res = compareArrays(reference.elements, U.elements, size_fast, 0.1f);
-    printf("	%s\n", (1 == res) ? "PASSED" : "FAILED");
+    
+    //print_matrix_to_file(U,"matrix-CUDA.txt");
+    //print_matrix_to_file(reference,"matrix-CPU.txt");
+    
+    unsigned res = compareArrays(reference.elements, U.elements, size_fast);
+    if(res==1){
+        printf("PASSED: GPU = CPU");
+    }
+    else{
+        printf("FAILED: GPU != CPU");
+    }
 
 
     
@@ -548,7 +618,7 @@ void copy_matrix_to_device(Matrix Mdevice, const Matrix Mhost) {
 
 void copy_matrix_from_device(Matrix Mhost, const Matrix Mdevice) {
     int size = Mdevice.num_rows * Mdevice.num_columns * sizeof (float);
-    cudaMemcpy(Mhost.elements, Mdevice.elements, size, cudaMemcpyDeviceToHost);
+    CUDA_SAFE_CALL(cudaMemcpy(Mhost.elements, Mdevice.elements, size, cudaMemcpyDeviceToHost));
 }
 
 void check_error(const char *msg) {

@@ -32,10 +32,260 @@ __global__ void chol_kernel_cudaUFMG_sqrt(float * U) {
 
 
 
-__global__ void chol_kernel_cudaUFMG_division(float * U) {
+__global__ void chol_kernel_cudaUFMG_division(float * U, int elem_per_thr) {
     // Get a thread identifier 
-    //int tx = blockIdx.x * blockDim.x + threadIdx.x;
+    int tx = blockIdx.x * blockDim.x + threadIdx.x;
+    int ty = blockIdx.y * blockDim.y + threadIdx.y;
+    
+    int tn = ty * blockDim.x * gridDim.x + tx;    
+    
+    
+    //#define DEBUGDIV
+
+    #ifdef DEBUGDIV
+    
+    int dbg = 0;
+    if(blockIdx.x == 4){
+        if(blockIdx.y == 5){
+            if(threadIdx.x == 2){
+                if(threadIdx.y == 1){
+                    dbg = 1;
+                    printf("\n\n");
+                    printf("\ntx=%d \nty=%d \ntn=%d", tx, ty, tn);
+                }
+            }
+        }        
+    }
+    
+    #endif
+    
+    
+    for(unsigned i=0;i<elem_per_thr;i++){
+        int iel = tn * elem_per_thr + i;
+        int xval = iel % MATRIX_SIZE;
+        int yval = iel / MATRIX_SIZE;
+
+        if(xval == yval){        
+            continue;
+        }
+        
+        
+        #ifdef     DEBUGDIV
+        if(dbg == 1){
+            if(i==37){
+            printf("\niel=%d \nxval=%d \nyval=%d", iel, xval, yval);
+            }
+        }
+        #endif
+
+        
+        // if on the lower diagonal...
+        if(yval > xval){
+            xval = MATRIX_SIZE - xval - 1;
+            yval = MATRIX_SIZE - yval - 1;
+        }
+        
+        
+        int iU = xval + yval * MATRIX_SIZE;
+        int iDiag = yval + yval * MATRIX_SIZE;
+        
+        #ifdef     DEBUGDIV
+        if(dbg == 1){
+            if(i==37){
+                printf("\nxtrans=%d \nytrans=%d \niU=%d \niDiag=%d", xval, yval, iU, iDiag);
+                printf("\n\n");
+            }
+        }
+        #endif        
+        
+        U[iU] /= U[iDiag];                    
+        
+    }
+    
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+__global__ void chol_kernel_cudaUFMG_elimination(float * U, int part, int divider) {
+    
+    int offset_k = (blockIdx.x * MATRIX_SIZE) / gridDim.x;
+    int end_k = ((blockIdx.x + 1) * MATRIX_SIZE) / gridDim.x;
+
+    // Diminui o range para a primeira metade...
+    
+    offset_k /= divider;
+    end_k /= divider;
+    
+
+    offset_k += ((MATRIX_SIZE / divider) * part);
+    end_k += ((MATRIX_SIZE / divider) * part);                
+
+    
+    
+    int offset_i = (threadIdx.x * MATRIX_SIZE) / blockDim.x;
+    int end_i = ((threadIdx.x + 1) * MATRIX_SIZE) / blockDim.x;
+    
+    
+    for(int k=offset_k; k<end_k; k++){
+        for(int i=offset_i; i<end_i; i++){
+            
+            int ki = k*MATRIX_SIZE + i;
+
+            
+            for(int j=i; j<MATRIX_SIZE; j++){       
+                
+                int ij = i*MATRIX_SIZE + j;                
+                int kj = k*MATRIX_SIZE + j;
+                
+                U[ij] = U[ij] - U[ki] * U[kj];
+                
+                
+                /*
+                if(ij > MATRIX_SIZE*MATRIX_SIZE-1){
+                    printf("AHHH: %d" , ij);
+                }
+                else{
+                    U[ij] = U[ij] +1;
+                }
+                 */ 
+            }                    
+        }
+    }    
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+__global__ void chol_kernel_cudaUFMG_elimination_shared(float * U) {
+
+    extern __shared__ float sha[];
+    
+    int offset_k = blockIdx.x * MATRIX_SIZE / gridDim.x;
+    int end_k = (blockIdx.x + 1) * MATRIX_SIZE / gridDim.x;
+    
+    int offset_i = threadIdx.x * MATRIX_SIZE / blockDim.x;
+    int end_i = (threadIdx.x + 1) * MATRIX_SIZE / blockDim.x;
+    
+    // copies from global to shared memory
+    int shax = 0;
+    int shay = 0;
+    
+    
+
+    int isha = 0;
+    
+    
+    
+    for(int k=offset_k; k<end_k; k++){
+        
+        // copies k from global to shared
+        
+        for(int i=offset_i; i<end_i; i++){
+            
+            int ki = k*MATRIX_SIZE + i;
+            
+            for(int j=i; j<MATRIX_SIZE; j++){                
+                int ij = i*MATRIX_SIZE + j;                
+                int kj = k*MATRIX_SIZE + j;
+
+                U[ij] = U[ij] - U[ki] * U[kj];
+            }                    
+        }
+    }    
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+__global__ void chol_kernel_cudaUFMG_zero(float * U, int elem_per_thr) {
+    // Get a thread identifier 
+    int tx = blockIdx.x * blockDim.x + threadIdx.x;
+    int ty = blockIdx.y * blockDim.y + threadIdx.y;
+    
+    int tn = ty * blockDim.x * gridDim.x + tx;    
+    
+    for(unsigned i=0;i<elem_per_thr;i++){
+        int iel = tn * elem_per_thr + i;
+        int xval = iel % MATRIX_SIZE;
+        int yval = iel / MATRIX_SIZE;
+
+        if(xval == yval){        
+            continue;
+        }        
+        
+        // if on the upper diagonal...
+        if(yval < xval){
+            xval = MATRIX_SIZE - xval - 1;
+            yval = MATRIX_SIZE - yval - 1;
+        }
+        int iU = xval + yval * MATRIX_SIZE;
+        U[iU] = 0;                            
+    }
+    
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
