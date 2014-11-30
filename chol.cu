@@ -17,6 +17,7 @@
 
 // includes, kernels
 #include "chol_kernel.cu"
+#include "utils.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -409,20 +410,44 @@ void chol_on_device_cudaUFMG(const Matrix A, Matrix U) {
 
     
 
-
-    int block_x_eli = 256;    
+#if 1
+    
+    int block_x_eli = 128;    
     int block_y_eli = 1;        
-    int thread_x_eli = 16;    
+    int thread_x_eli = 32;    
+    int thread_y_eli = 1;        
+    dim3 grid_eli(block_x_eli, block_y_eli, 1);    
+    dim3 thread_block_eli(thread_x_eli, thread_y_eli, 1);            
+    
+    int divider = 1;
+    for(int ik=0; ik<divider; ik++){
+        chol_kernel_cudaUFMG_elimination <<<grid_eli, thread_block_eli>>>(gpu_u.elements, ik, divider);        
+    }
+    
+    
+    
+    
+#else
+    
+    int block_x_eli = 1024;    
+    int block_y_eli = 1;        
+    int thread_x_eli = 4;    
     int thread_y_eli = 1;        
     dim3 grid_eli(block_x_eli, block_y_eli, 1);    
     dim3 thread_block_eli(thread_x_eli, thread_y_eli, 1);        
-    chol_kernel_cudaUFMG_elimination <<<grid_eli, thread_block_eli>>>(gpu_u.elements);        
+    
+    int shared_mem_size = 4 * MATRIX_SIZE * sizeof(float);    
+    chol_kernel_cudaUFMG_elimination_shared <<<grid_eli, thread_block_eli, shared_mem_size>>>(gpu_u.elements);        
+
+#endif    
+
+    
     
 
-
     
-
-    chol_kernel_cudaUFMG_zero <<<grid_div, thread_block_div >>>(gpu_u.elements, elements_per_thread_div);
+    
+    chol_kernel_cudaUFMG_zero <<<grid_div, thread_block_div>>>(gpu_u.elements, elements_per_thread_div);
+    
     
     
     
@@ -431,13 +456,17 @@ void chol_on_device_cudaUFMG(const Matrix A, Matrix U) {
     
     //Copy data back
     copy_matrix_from_device(U, gpu_u);
+
+    //CUDA_SAFE_CALL(cudaPeekAtLastError());    
+    //return;
+
     
     //Stop timer after copy back					 
-    cudaEventRecord(stop, 0);
-    cudaEventSynchronize(stop);
+    CUDA_SAFE_CALL(cudaEventRecord(stop, 0));
+    CUDA_SAFE_CALL(cudaEventSynchronize(stop));
 
     float time_gpu_fast;
-    cudaEventElapsedTime(&time_gpu_fast, start, stop);
+    CUDA_SAFE_CALL(cudaEventElapsedTime(&time_gpu_fast, start, stop));
     
     //Free memory on device
     cudaFree(gpu_u.elements);
@@ -589,7 +618,7 @@ void copy_matrix_to_device(Matrix Mdevice, const Matrix Mhost) {
 
 void copy_matrix_from_device(Matrix Mhost, const Matrix Mdevice) {
     int size = Mdevice.num_rows * Mdevice.num_columns * sizeof (float);
-    cudaMemcpy(Mhost.elements, Mdevice.elements, size, cudaMemcpyDeviceToHost);
+    CUDA_SAFE_CALL(cudaMemcpy(Mhost.elements, Mdevice.elements, size, cudaMemcpyDeviceToHost));
 }
 
 void check_error(const char *msg) {
