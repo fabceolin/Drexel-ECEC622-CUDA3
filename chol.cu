@@ -35,6 +35,8 @@ void chol_on_device(const Matrix, Matrix);
 void chol_on_device_optimized(const Matrix, Matrix);
 void chol_on_device_cudaUFMG(const Matrix, Matrix);
 
+extern void print_matrix_to_file(const Matrix M, char *filename);
+
 //Globals
 double time_cpu;
 // Matrices for the program
@@ -87,13 +89,13 @@ int main(int argc, char** argv) {
         printf("Cholesky decomposition failed. The input matrix is not positive definite. \n");
         exit(0);
     }
-    /*
+#if 0
     printf("Double checking for correctness by recovering the original matrix. \n");
     if(check_chol(A, reference) == 0){
             printf("CPU: FAILED\n");
             exit(0);
     }
-     */
+#endif    
     printf("	PASSED\n"); //IT IS SO PERFECT WE DON'T EVEN CHECK.
 
 
@@ -135,9 +137,20 @@ void check_for_error(char *msg) {
 
 
 
-unsigned compareArrays(float *reference, float * device, int size, float epsilon){
-    for(int i=0; i<size; size++) {
-        if (reference[i] - device[i] > epsilon) {
+unsigned compareArrays(float *reference, float * device, int size){
+    
+    
+    float epsilon = 0.02;
+    
+    //printf("\nSize= %d", size);
+    
+    for(int i=0; i<size; i++) {
+        
+        if(i<100){
+            //printf("\nreference=%f   \ndevice=%f \nepsilon=%f" , reference[i], device[i], epsilon);
+        }
+        
+        if (fabs(reference[i] - device[i]) > epsilon) {
             return 0;
         }
     }
@@ -219,7 +232,7 @@ void chol_on_device(const Matrix A, Matrix U) {
     printf("	Speedup: %0.10f\n", time_cpu / time_gpu);
     //Check if the device result is equivalent to the expected solution. If you can't meet the desired tolerance, try using double precision support.
     unsigned int size = reference.num_rows * reference.num_columns;
-    unsigned res = compareArrays(reference.elements, U.elements, size, 0.1f);
+    unsigned res = compareArrays(reference.elements, U.elements, size);
     printf("	%s\n", (1 == res) ? "PASSED" : "FAILED");
 }
 
@@ -326,7 +339,7 @@ void chol_on_device_optimized(const Matrix A, Matrix U) {
     printf("	Speedup: %0.10f\n", time_cpu / time_gpu_fast);
     //Check if the device result is equivalent to the expected solution. If you can't meet the desired tolerance, try using double precision support.
     unsigned int size_fast = reference.num_rows * reference.num_columns;
-    unsigned res = compareArrays(reference.elements, U.elements, size_fast, 0.1f);
+    unsigned res = compareArrays(reference.elements, U.elements, size_fast);
     printf("	%s\n", (1 == res) ? "PASSED" : "FAILED");
     
     //	CUTBoolean res_fast = cutComparefe(reference.elements, U_on_device_fast.elements, size_fast, 0.1f);
@@ -390,10 +403,34 @@ void chol_on_device_cudaUFMG(const Matrix A, Matrix U) {
     dim3 grid_div(block_x_div, block_y_div, 1);    
     dim3 thread_block_div(thread_x_div, thread_y_div, 1);
     int elements_per_thread_div = ((MATRIX_SIZE * MATRIX_SIZE) / 2) /  (thread_x_div * thread_y_div * block_x_div * block_y_div);        
-    chol_kernel_cudaUFMG_division << <grid_div, thread_block_div >>>(gpu_u.elements, elements_per_thread_div);
+    chol_kernel_cudaUFMG_division <<<grid_div, thread_block_div >>>(gpu_u.elements, elements_per_thread_div);
+
+
 
     
+#if 1
+
+    int block_x_eli = 256;    
+    int block_y_eli = 1;        
+    int thread_x_eli = 16;    
+    int thread_y_eli = 1;        
     
+    
+    dim3 grid_eli(block_x_eli, block_y_eli, 1);    
+    dim3 thread_block_eli(thread_x_eli, thread_y_eli, 1);    
+    
+    //int elements_per_thread_eli = ((MATRIX_SIZE * MATRIX_SIZE) / 2) /  (thread_x_eli * thread_y_eli * block_x_eli * block_y_eli);
+    
+    //cudaStream_t stream1;
+    //cudaStreamCreate ( &stream1) ;
+    
+    chol_kernel_cudaUFMG_elimination <<<grid_eli, thread_block_eli>>>(gpu_u.elements);        
+    
+    //cudaStreamSynchronize (stream1);
+    //cudaDeviceSynchronize();
+    
+#endif
+
     
     /*---------------------------------------------*/
     
@@ -421,8 +458,17 @@ void chol_on_device_cudaUFMG(const Matrix A, Matrix U) {
     printf("	Speedup: %0.10f\n", time_cpu / (time_gpu_fast / 1000) ) ;
     //Check if the device result is equivalent to the expected solution. If you can't meet the desired tolerance, try using double precision support.
     unsigned int size_fast = reference.num_rows * reference.num_columns;
-    unsigned res = compareArrays(reference.elements, U.elements, size_fast, 0.1f);
-    printf("	%s\n", (1 == res) ? "PASSED" : "FAILED");
+    
+    print_matrix_to_file(U,"matrix-CUDA.txt");
+    print_matrix_to_file(reference,"matrix-CPU.txt");
+    
+    unsigned res = compareArrays(reference.elements, U.elements, size_fast);
+    if(res==1){
+        printf("PASSED: GPU = CPU");
+    }
+    else{
+        printf("FAILED: GPU != CPU");
+    }
 
 
     

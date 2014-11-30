@@ -13,6 +13,22 @@ extern void print_matrix(const Matrix);
 extern Matrix create_positive_definite_matrix(unsigned int, unsigned int);
 extern void print_matrix(const Matrix);
 
+
+
+/* Prints the matrix out to screen. */
+void print_matrix_to_file(const Matrix M, char *filename) {
+    FILE* filef = fopen(filename,"w");
+    
+    for (unsigned int i = 0; i < M.num_rows; i++) {
+        for (unsigned int j = 0; j < M.num_columns; j++)
+            fprintf(filef,"%f ", M.elements[i * M.num_rows + j]);
+        fprintf(filef,"\n");
+    }
+    fprintf(filef,"\n");
+    fclose(filef);
+}
+
+
 /* Prints the matrix out to screen. */
 void print_matrix(const Matrix M) {
     for (unsigned int i = 0; i < M.num_rows; i++) {
@@ -142,7 +158,10 @@ int chol_gold(const Matrix A, Matrix U) {
         for (j = (k + 1); j < U.num_rows; j++)
             U.elements[k * U.num_rows + j] /= U.elements[k * U.num_rows + k]; // Division step
 
-        continue;
+        
+        
+        //continue;
+        
         
         
         // Elimination step

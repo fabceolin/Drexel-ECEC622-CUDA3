@@ -40,7 +40,7 @@ __global__ void chol_kernel_cudaUFMG_division(float * U, int elem_per_thr) {
     int tn = ty * blockDim.x * gridDim.x + tx;    
     
     
-    #define DEBUGDIV
+    //#define DEBUGDIV
 
     #ifdef DEBUGDIV
     
@@ -98,11 +98,49 @@ __global__ void chol_kernel_cudaUFMG_division(float * U, int elem_per_thr) {
         }
         #endif        
         
-        U[iU] /= U[iDiag];            
+        U[iU] /= U[iDiag];                    
         
     }
     
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+__global__ void chol_kernel_cudaUFMG_elimination(float * U) {
+    
+    int offset_k = blockIdx.x * MATRIX_SIZE / blockDim.x;
+    int end_k = (blockIdx.x + 1) * MATRIX_SIZE / blockDim.x;
+
+    
+    int offset_i = threadIdx.x * MATRIX_SIZE / threadIdx.x;
+    int end_i = (threadIdx.x + 1) * MATRIX_SIZE / threadIdx.x;
+    
+    for(int k=offset_k; k<end_k; k++){
+        for(int i=offset_i; i<end_i; i++){
+            //printf("\n%d",i);
+            //printf("\n%d %d %d", ij, ki, kj);
+            for(int j=i; j<MATRIX_SIZE; j++){                
+                int ij = i*MATRIX_SIZE + j;
+                int ki = k*MATRIX_SIZE + i;
+                int kj = k*MATRIX_SIZE + j;
+
+                U[ij] = U[ij] - U[ki] * U[kj];
+            }                    
+        }
+    }
+    
+}
+
 
 
 
