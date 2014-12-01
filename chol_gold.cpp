@@ -117,6 +117,7 @@ Matrix create_positive_definite_matrix(unsigned int num_rows, unsigned int num_c
         for (j = 0; j < num_columns; j++) {
             if (i == j)
                 M.elements[i * M.num_rows + j] += 0.5 * M.num_rows;
+            
         }
     if (check_if_diagonal_dominant(M))
         printf("done. \n");
