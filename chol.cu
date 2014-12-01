@@ -454,13 +454,13 @@ void chol_on_device_cudaUFMG(const Matrix A, Matrix U) {
         chol_kernel_cudaUFMG_elimination <<<grid, thread_block>>>(gpu_u.elements, k);
 
         //Sync at end and check for errors
-        cudaThreadSynchronize();
+        //cudaThreadSynchronize();
         
         //check_for_error("FAST KERNEL FAILURE");
     }
 
     //Sync at end
-    cudaThreadSynchronize();
+    //cudaThreadSynchronize();
     
 
 #endif    
