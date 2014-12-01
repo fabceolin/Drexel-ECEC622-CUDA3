@@ -1,24 +1,7 @@
 /*  Device code for Cholesky decomposition. */
-
 #ifndef _CHOL_KERNEL_H_
 #define _CHOL_KERNEL_H_
-
 #include "chol.h"
-
-/* Edit this file to complete the functionality of Cholesky decomposition on the GPU. You may add addtional Kernel functions as needed. */
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 __global__ void chol_kernel_cudaUFMG_sqrt(float * U) {
@@ -116,102 +99,49 @@ __global__ void chol_kernel_cudaUFMG_division(float * U, int elem_per_thr) {
 
 
 
-__global__ void chol_kernel_cudaUFMG_elimination(float * U, int part, int divider) {
-    
-    int offset_k = (blockIdx.x * MATRIX_SIZE) / gridDim.x;
-    int end_k = ((blockIdx.x + 1) * MATRIX_SIZE) / gridDim.x;
+__global__ void chol_kernel_cudaUFMG_elimination(float * U, int k) {
 
-    // Diminui o range para a primeira metade...
+    //This call acts as a single K iteration
+    //Each block does a single i iteration
+    //Need to consider offset, 
+    int i = (k+1) + blockIdx.x;
     
-    offset_k /= divider;
-    end_k /= divider;
+    //Each thread does some part of j
+    //Stide in units of 'stride'
+    //Thread 0 does 0, 16, 32
+    //Thread 1 does 1, 17, 33
+    //..etc.
+    int jstart = i + threadIdx.x;
+    int jstep = blockDim.x;
     
-
-    offset_k += ((MATRIX_SIZE / divider) * part);
-    end_k += ((MATRIX_SIZE / divider) * part);                
-
+    // Pre-calculate indexes
+    int kM = k * MATRIX_SIZE;
+    int iM = i * MATRIX_SIZE;
+    int ki = kM + i;
     
-    
-    int offset_i = (threadIdx.x * MATRIX_SIZE) / blockDim.x;
-    int end_i = ((threadIdx.x + 1) * MATRIX_SIZE) / blockDim.x;
-    
-    
-    for(int k=offset_k; k<end_k; k++){
-        for(int i=offset_i; i<end_i; i++){
-            
-            int ki = k*MATRIX_SIZE + i;
-
-            
-            for(int j=i; j<MATRIX_SIZE; j++){       
-                
-                int ij = i*MATRIX_SIZE + j;                
-                int kj = k*MATRIX_SIZE + j;
-                
-                U[ij] = U[ij] - U[ki] * U[kj];
-                
-                
-                /*
-                if(ij > MATRIX_SIZE*MATRIX_SIZE-1){
-                    printf("AHHH: %d" , ij);
-                }
-                else{
-                    U[ij] = U[ij] +1;
-                }
-                 */ 
-            }                    
-        }
-    }    
+    //Do work for this i iteration
+    //Want to stride across
+    for (int j=jstart; j<MATRIX_SIZE; j+=jstep) {
+        U[iM + j] -= U[ki] * U[kM + j];
+    }
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
-__global__ void chol_kernel_cudaUFMG_elimination_shared(float * U) {
-
-    extern __shared__ float sha[];
-    
-    int offset_k = blockIdx.x * MATRIX_SIZE / gridDim.x;
-    int end_k = (blockIdx.x + 1) * MATRIX_SIZE / gridDim.x;
-    
-    int offset_i = threadIdx.x * MATRIX_SIZE / blockDim.x;
-    int end_i = (threadIdx.x + 1) * MATRIX_SIZE / blockDim.x;
-    
-    // copies from global to shared memory
-    int shax = 0;
-    int shay = 0;
-    
-    
-
-    int isha = 0;
     
     
     
-    for(int k=offset_k; k<end_k; k++){
-        
-        // copies k from global to shared
-        
-        for(int i=offset_i; i<end_i; i++){
-            
-            int ki = k*MATRIX_SIZE + i;
-            
-            for(int j=i; j<MATRIX_SIZE; j++){                
-                int ij = i*MATRIX_SIZE + j;                
-                int kj = k*MATRIX_SIZE + j;
+    
 
-                U[ij] = U[ij] - U[ki] * U[kj];
-            }                    
-        }
-    }    
-}
+
+
+
+
+
+
+
+
+
+
+
 
 
 
