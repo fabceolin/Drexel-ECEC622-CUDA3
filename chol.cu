@@ -428,6 +428,12 @@ void chol_on_device_cudaUFMG(const Matrix A, Matrix U) {
     int thread_x_eli = 256;    
     int thread_y_eli = 1;        
 
+    
+
+    
+    //cudaStream_t stream1;
+    //cudaStreamCreate(&stream1);
+    
     //Each kernel call will be one iteration of out K loop
     for (int k = 0; k < MATRIX_SIZE; k++) {
         
@@ -450,8 +456,10 @@ void chol_on_device_cudaUFMG(const Matrix A, Matrix U) {
         dim3 thread_block(thread_x_eli, 1, 1);
         dim3 grid(block_x_eli, 1);
 
+        
+        
         //Call kernel with for this K iteration
-        chol_kernel_cudaUFMG_elimination <<<grid, thread_block>>>(gpu_u.elements, k);
+        chol_kernel_cudaUFMG_elimination <<<grid, thread_block/*, 0, stream1*/>>>(gpu_u.elements, k);
 
         //Sync at end and check for errors
         //cudaThreadSynchronize();
@@ -459,6 +467,8 @@ void chol_on_device_cudaUFMG(const Matrix A, Matrix U) {
         //check_for_error("FAST KERNEL FAILURE");
     }
 
+    //cudaStreamSynchronize (stream1);
+    
     //Sync at end
     //cudaThreadSynchronize();
     

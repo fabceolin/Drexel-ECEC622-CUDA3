@@ -116,8 +116,8 @@ __global__ void chol_kernel_cudaUFMG_elimination(float * U, int k) {
     
     // Pre-calculate indexes
     int kM = k * MATRIX_SIZE;
+    int iM = i * MATRIX_SIZE;
     int ki = kM + i;
-    int iM= i * MATRIX_SIZE;
     
     //Do work for this i iteration
     //Want to stride across
