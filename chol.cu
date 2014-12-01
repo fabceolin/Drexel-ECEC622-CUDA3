@@ -425,7 +425,7 @@ void chol_on_device_cudaUFMG(const Matrix A, Matrix U) {
  
     int block_y_eli = 1;        
     //Each thread within a block will take some j iterations
-    int thread_x_eli = 128;    
+    int thread_x_eli = 256;    
     int thread_y_eli = 1;        
 
     //Each kernel call will be one iteration of out K loop
